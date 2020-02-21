@@ -31,6 +31,7 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
     void PopulateWordList(const QStringMap & wordDictionary);
+    void ShowMeaning(const QString & word);
 
 public slots:
     void OnDictionaryLoaded(QStringMap wordDictionary);

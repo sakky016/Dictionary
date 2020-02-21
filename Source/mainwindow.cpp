@@ -119,15 +119,7 @@ void MainWindow::OnDictionaryLoaded(QStringMap wordDictionary)
 void MainWindow::on_listWords_itemDoubleClicked(QListWidgetItem *item)
 {
     QString word = item->text();
-    if (m_wordDictionary.contains(word))
-    {
-        QString meaning = m_wordDictionary[word];
-        ui->txtMeaning->setText(meaning);
-    }
-    else
-    {
-        ui->txtMeaning->setText("[ " + word + " ] not found!");
-    }
+    ShowMeaning(word);
 }
 
 //-------------------------------------------------------------------------------------------------------
@@ -161,6 +153,22 @@ void MainWindow::on_inpWord_textChanged(const QString &arg1)
 }
 
 //-------------------------------------------------------------------------------------------------------
+// Displays word and meaning in the Right pane
+//-------------------------------------------------------------------------------------------------------
+void MainWindow::ShowMeaning(const QString & word)
+{
+    if (m_wordDictionary.contains(word))
+    {
+        QString meaning = m_wordDictionary[word];
+        ui->txtMeaning->setHtml("<B>" + word + "</B><BR><BR>" + meaning);
+    }
+    else
+    {
+        ui->txtMeaning->setHtml("<FONT COLOR=RED>[ " + word + " ] not found!</FONT>");
+    }
+}
+
+//-------------------------------------------------------------------------------------------------------
 // Triggered when "Search" button is pressed
 //-------------------------------------------------------------------------------------------------------
 void MainWindow::on_btnSearch_clicked()
@@ -172,14 +180,6 @@ void MainWindow::on_btnSearch_clicked()
         return;
     }
 
-    if (m_wordDictionary.contains(word))
-    {
-        ui->txtMeaning->setText(m_wordDictionary[word]);
-    }
-    else
-    {
-        ui->txtMeaning->setText("[ " + word + " ] not found!");
-    }
-
+    ShowMeaning(word);
     ui->inpWord->setFocus();
 }
