@@ -36,11 +36,11 @@ void DictionaryLoadWorker::LoadDictionary()
         {
             QString word = line.left(splitIndex).toLower();
             QString meaning = line.right(line.size() - splitIndex - 1);
-            m_wordDictionary[word] = meaning;
+            (*m_wordDictionary)[word] = meaning;
         }
     }// End of file
 
-    qDebug() << "Words loaded: " << m_wordDictionary.size();
+    qDebug() << "Words loaded: " << m_wordDictionary->size();
     if (invalidEntries)
     {
         qDebug() << "Invalid words: " << invalidEntries;
@@ -59,16 +59,21 @@ MainWindow::MainWindow(QWidget *parent)
 
     qRegisterMetaType<QStringMap>("QStringMap");
 
+    m_bUseMatchAnywhere = ui->chkUseRegex->isChecked();
+
+    // Create model data
     m_modelFilterData = new QStandardItemModel();
     m_modelAllData = new QStandardItemModel();
 
+    // allocate memory to Word dictionary
+    m_wordDictionary = new QStringMap;
+
     // Entire word list is the currently active model
     m_activeModel = m_modelAllData;
-    m_activeModel->sort(0, Qt::AscendingOrder);
 
     // Create dictionary load worker and start running
     DictionaryLoadWorker *worker = new DictionaryLoadWorker(m_wordDictionary);
-    connect(worker, SIGNAL(DictionaryLoaded(QStringMap)), this, SLOT(OnDictionaryLoaded(QStringMap)));
+    connect(worker, SIGNAL(DictionaryLoaded(QStringMap*)), this, SLOT(OnDictionaryLoaded(QStringMap*)));
     worker->start();
 
     ui->statusBar->showMessage("Loading Dictionary. Please wait...");
@@ -87,18 +92,34 @@ MainWindow::~MainWindow()
 void MainWindow::UpdateModel(QStandardItemModel* model)
 {
     m_activeModel = model;
+    m_activeModel->sort(0, Qt::AscendingOrder);
     ui->listWords->setModel(m_activeModel);
 }
 
 //-------------------------------------------------------------------------------------------------------
-// Populates the word list as per the provided wordDictionary
+// Prepares model data for all the words in the dictionary
 //-------------------------------------------------------------------------------------------------------
-void MainWindow::PopulateWordList(const QStringMap & wordDictionary, bool bPopulateFullData)
+void MainWindow::PrepareDictionaryModelData()
+{
+    for(auto item = m_wordDictionary->begin(); item != m_wordDictionary->end(); item++)
+    {
+        QStandardItem *modelItem = new QStandardItem(item.key());
+        modelItem->setFlags(modelItem->flags() &  ~Qt::ItemIsEditable);
+        m_modelAllData->appendRow(modelItem);
+    }
+}
+
+//-------------------------------------------------------------------------------------------------------
+// Populates the word list as per the provided wordDictionary
+// By default bPopulateFullData = false
+//-------------------------------------------------------------------------------------------------------
+void MainWindow::PopulateWordList(QStringMap * wordDictionary)
 {
     ui->statusBar->showMessage("Populating word list...");
 
-    if (bPopulateFullData)
+    if (!wordDictionary)
     {
+        // Update word list as per the actual dictionary
         UpdateModel(m_modelAllData);
     }
     else
@@ -106,13 +127,14 @@ void MainWindow::PopulateWordList(const QStringMap & wordDictionary, bool bPopul
         // Clear the existing list first
         m_modelFilterData->clear();
 
-        for(auto item = wordDictionary.begin(); item != wordDictionary.end(); item++)
+        for(auto item = wordDictionary->begin(); item != wordDictionary->end(); item++)
         {
             QStandardItem *modelItem = new QStandardItem(item.key());
             modelItem->setFlags(modelItem->flags() &  ~Qt::ItemIsEditable);
             m_modelFilterData->appendRow(modelItem);
         }
 
+        // Update word list as per filter data
         UpdateModel(m_modelFilterData);
     }
 
@@ -124,17 +146,18 @@ void MainWindow::PopulateWordList(const QStringMap & wordDictionary, bool bPopul
 //-------------------------------------------------------------------------------------------------------
 // Triggered when the Dictionary load has completed
 //-------------------------------------------------------------------------------------------------------
-void MainWindow::OnDictionaryLoaded(QStringMap wordDictionary)
+void MainWindow::OnDictionaryLoaded(QStringMap * wordDictionary)
 {
     m_wordDictionary = wordDictionary;
-    if (m_wordDictionary.empty())
+    if (m_wordDictionary->empty())
     {
         ui->statusBar->showMessage("Failed to load dictionary!");
         return;
     }
 
-    ui->statusBar->showMessage("Dictionary loaded with " + QString::number(m_wordDictionary.size()) + " words.", 2);
-    PopulateWordList(m_wordDictionary);
+    ui->statusBar->showMessage("Dictionary loaded with " + QString::number(m_wordDictionary->size()) + " words.", 2);
+    PrepareDictionaryModelData();
+    PopulateWordList();
 
     ui->inpWord->setFocus();
 }
@@ -147,26 +170,39 @@ void MainWindow::on_inpWord_textChanged(const QString &arg1)
 {
     if (arg1.isEmpty())
     {
-        // Show entire entire word list if not already showing
-        PopulateWordList(m_wordDictionary);
+        // Show entire entire word list
+        PopulateWordList();
     }
     else if (arg1.size() > MIN_WORD_LENGTH_FOR_PREDICTION)
     {
-        QRegExp regexSearch(arg1.toLower());
         QString item;
-        QStringMap searchedWordsDict;
-        for (auto item = m_wordDictionary.begin(); item != m_wordDictionary.end(); item++)
+        QStringMap *searchedWordsDict = new QStringMap;
+        for (auto item = m_wordDictionary->begin(); item != m_wordDictionary->end(); item++)
         {
             QString word = item.key();
-            if (word.contains(regexSearch))
+            if (m_bUseMatchAnywhere)
             {
-                // Add this word to the filtered map
-                searchedWordsDict[word] = m_wordDictionary[word];
+                QRegExp regexSearch(arg1.toLower());
+                if (word.contains(regexSearch))
+                {
+                    // Add this word to the filtered map
+                    (*searchedWordsDict)[word] = m_wordDictionary->value(word);
+                }
+            }
+            else
+            {
+                QString searchString = arg1.toLower();
+                if (word.startsWith(searchString))
+                {
+                    // Add this word to the filtered map
+                    (*searchedWordsDict)[word] = m_wordDictionary->value(word);
+                }
             }
         }
 
         // Show in word list pane
         PopulateWordList(searchedWordsDict);
+        delete searchedWordsDict;
     }
 }
 
@@ -175,9 +211,9 @@ void MainWindow::on_inpWord_textChanged(const QString &arg1)
 //-------------------------------------------------------------------------------------------------------
 void MainWindow::ShowMeaning(const QString & word)
 {
-    if (m_wordDictionary.contains(word))
+    if (m_wordDictionary->contains(word))
     {
-        QString meaning = m_wordDictionary[word];
+        QString meaning = (*m_wordDictionary)[word];
         ui->txtMeaning->setHtml("<B>" + word + "</B><BR><BR>" + meaning);
     }
     else
@@ -210,4 +246,26 @@ void MainWindow::on_listWords_doubleClicked(const QModelIndex &index)
     QStandardItem *item = m_activeModel->itemFromIndex(index);
     QString word = item->text();
     ShowMeaning(word);
+}
+
+//-------------------------------------------------------------------------------------------------------
+// Triggered when regex search is enabled/disabled
+//-------------------------------------------------------------------------------------------------------
+void MainWindow::on_chkUseRegex_stateChanged(int arg1)
+{
+    m_bUseMatchAnywhere = arg1 == Qt::Checked;
+    if (m_bUseMatchAnywhere)
+    {
+        ui->statusBar->showMessage("Using match anywhere");
+    }
+    else
+    {
+        ui->statusBar->showMessage("using strict matching");
+    }
+
+    QString searchText = ui->inpWord->text().toLower();
+    if (!searchText.isEmpty())
+    {
+        on_inpWord_textChanged(searchText);
+    }
 }
