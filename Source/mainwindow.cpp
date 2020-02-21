@@ -59,6 +59,13 @@ MainWindow::MainWindow(QWidget *parent)
 
     qRegisterMetaType<QStringMap>("QStringMap");
 
+    m_modelFilterData = new QStandardItemModel();
+    m_modelAllData = new QStandardItemModel();
+
+    // Entire word list is the currently active model
+    m_activeModel = m_modelAllData;
+    m_activeModel->sort(0, Qt::AscendingOrder);
+
     // Create dictionary load worker and start running
     DictionaryLoadWorker *worker = new DictionaryLoadWorker(m_wordDictionary);
     connect(worker, SIGNAL(DictionaryLoaded(QStringMap)), this, SLOT(OnDictionaryLoaded(QStringMap)));
@@ -75,21 +82,42 @@ MainWindow::~MainWindow()
 }
 
 //-------------------------------------------------------------------------------------------------------
+// Updates the active model data
+//-------------------------------------------------------------------------------------------------------
+void MainWindow::UpdateModel(QStandardItemModel* model)
+{
+    m_activeModel = model;
+    ui->listWords->setModel(m_activeModel);
+}
+
+//-------------------------------------------------------------------------------------------------------
 // Populates the word list as per the provided wordDictionary
 //-------------------------------------------------------------------------------------------------------
-void MainWindow::PopulateWordList(const QStringMap & wordDictionary)
+void MainWindow::PopulateWordList(const QStringMap & wordDictionary, bool bPopulateFullData)
 {
     ui->statusBar->showMessage("Populating word list...");
 
-    // Clear the existing list first
-    ui->listWords->clear();
-
-    for(auto item = wordDictionary.begin(); item != wordDictionary.end(); item++)
+    if (bPopulateFullData)
     {
-        ui->listWords->addItem(item.key());
+        UpdateModel(m_modelAllData);
+    }
+    else
+    {
+        // Clear the existing list first
+        m_modelFilterData->clear();
+
+        for(auto item = wordDictionary.begin(); item != wordDictionary.end(); item++)
+        {
+            QStandardItem *modelItem = new QStandardItem(item.key());
+            modelItem->setFlags(modelItem->flags() &  ~Qt::ItemIsEditable);
+            m_modelFilterData->appendRow(modelItem);
+        }
+
+        UpdateModel(m_modelFilterData);
     }
 
-    ui->opStatus->setText("Items: " + QString::number(ui->listWords->count()));
+    int itemsPopulated = m_activeModel->rowCount();
+    ui->opStatus->setText("Items: " + QString::number(itemsPopulated));
     ui->statusBar->clearMessage();
 }
 
@@ -111,16 +139,6 @@ void MainWindow::OnDictionaryLoaded(QStringMap wordDictionary)
     ui->inpWord->setFocus();
 }
 
-
-
-//-------------------------------------------------------------------------------------------------------
-// Triggered when an item is double clicked from the word list pane
-//-------------------------------------------------------------------------------------------------------
-void MainWindow::on_listWords_itemDoubleClicked(QListWidgetItem *item)
-{
-    QString word = item->text();
-    ShowMeaning(word);
-}
 
 //-------------------------------------------------------------------------------------------------------
 // Triggered whenever the text in the input field changes.
@@ -182,4 +200,14 @@ void MainWindow::on_btnSearch_clicked()
 
     ShowMeaning(word);
     ui->inpWord->setFocus();
+}
+
+//-------------------------------------------------------------------------------------------------------
+// Triggered when a word is double clicked from the left pane
+//-------------------------------------------------------------------------------------------------------
+void MainWindow::on_listWords_doubleClicked(const QModelIndex &index)
+{
+    QStandardItem *item = m_activeModel->itemFromIndex(index);
+    QString word = item->text();
+    ShowMeaning(word);
 }

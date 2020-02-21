@@ -3,8 +3,9 @@
 
 #include <QListWidgetItem>
 #include <QMainWindow>
+#include <QStandardItemModel>
 #include <QThread>
-#include <QMap>
+
 
 typedef QHash<QString, QString> QStringMap;
 Q_DECLARE_METATYPE(QStringMap)
@@ -30,22 +31,26 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-    void PopulateWordList(const QStringMap & wordDictionary);
+    void PopulateWordList(const QStringMap & wordDictionary, bool bPopulateFullData = false);
     void ShowMeaning(const QString & word);
+    void UpdateModel(QStandardItemModel* model);
 
 public slots:
     void OnDictionaryLoaded(QStringMap wordDictionary);
 
 private slots:
-    void on_listWords_itemDoubleClicked(QListWidgetItem *item);
-
     void on_inpWord_textChanged(const QString &arg1);
 
     void on_btnSearch_clicked();
 
+    void on_listWords_doubleClicked(const QModelIndex &index);
+
 private:
     Ui::MainWindow *ui;
     QStringMap m_wordDictionary;
+    QStandardItemModel *m_modelFilterData;
+    QStandardItemModel *m_modelAllData;
+    QStandardItemModel *m_activeModel;
 };
 
 
