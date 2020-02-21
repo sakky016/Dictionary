@@ -35,7 +35,7 @@ void DictionaryLoadWorker::LoadDictionary()
         else
         {
             QString word = line.left(splitIndex).toLower();
-            QString meaning = line.right(line.size() - splitIndex + 1);
+            QString meaning = line.right(line.size() - splitIndex - 1);
             m_wordDictionary[word] = meaning;
         }
     }// End of file
